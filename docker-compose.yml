@@ -1,0 +1,8 @@
+services:
+  renfe-notifier-bot:
+    build: .
+    container_name: renfe-notifier-bot
+    restart: unless-stopped
+    volumes:
+      - ./secrets/bot_data.py:/app/python/bot_data.py:ro
+      - ./data:/data
