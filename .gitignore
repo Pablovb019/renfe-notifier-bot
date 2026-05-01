@@ -100,16 +100,24 @@ ENV/
 # mypy
 .mypy_cache/
 
-# Excluir archivos de documentación no necesarios (excepto README y GUIA_AVANZADA)
-PLAN.md
-PLAN_MEJORAS_UX_V3.md
-FORK_CHAIN.md
-PUBLICAR_EN_GITHUB.md
-PASOS_GITHUB_DESKTOP.md
-RESUMEN_FINAL.md
+# =====================================================
+# EXCLUIR: Todo menos README.md, GUIA_AVANZADA.md y código
+# =====================================================
+
+# Excluir markdown salvo README.md y GUIA_AVANZADA.md
+*.md
+*.MD
+!README.md
+!GUIA_AVANZADA.md
+
+# Excluir archivos Docker
+Dockerfile
+docker-compose.yml
+
+# Excluir archivos de documentación interna adicionales
 publish-repo.ps1
 
-# Excluir directorio de secrets
+# Excluir directorio de secrets (credenciales locales)
 secrets/
 
 # Excluir artefactos de debug
