@@ -1291,8 +1291,60 @@ class RenfeBotConversations:
             return ConvStates.ADDITIONAL_QUERY
 
         if answer:
+            conv._additional_same_stations = None
+            return await self._prompt_additional_same_stations(bot, userid, conv)
+
+        return await self._return_to_main_menu(bot, userid, conv)
+
+    async def handler_additional_same_stations(self, update, context):
+        bot = context.bot
+        userid = update.effective_user.id
+        conv = self._get_conv(userid)
+        self._track_user_message(update, conv)
+        answer = self._normalize_yes_no(update.message.text)
+        if answer is None:
+            await self._bot_send(
+                bot,
+                userid,
+                conv,
+                TEXTS["ASK_ADDITIONAL_SAME_STATIONS"],
+                reply_markup=ReplyKeyboardMarkup(KEYBOARDS["YES_NO_OPTIONS"], one_time_keyboard=True),
+            )
+            return ConvStates.ADDITIONAL_SAME_STATIONS
+
+        conv._additional_same_stations = answer
+        return await self._prompt_additional_same_date(bot, userid, conv)
+
+    async def handler_additional_same_date(self, update, context):
+        bot = context.bot
+        userid = update.effective_user.id
+        conv = self._get_conv(userid)
+        self._track_user_message(update, conv)
+        answer = self._normalize_yes_no(update.message.text)
+        if answer is None:
+            await self._bot_send(
+                bot,
+                userid,
+                conv,
+                TEXTS["ASK_ADDITIONAL_SAME_DATE"],
+                reply_markup=ReplyKeyboardMarkup(KEYBOARDS["YES_NO_OPTIONS"], one_time_keyboard=True),
+            )
+            return ConvStates.ADDITIONAL_SAME_DATE
+
+        same_stations = bool(conv._additional_same_stations)
+        conv._additional_same_stations = None
+
+        if same_stations:
+            await self._cleanup_chat_best_effort(bot, userid, conv)
+            if answer:
+                return await self._prompt_plaza_h(bot, userid, conv, include_selected_data=True)
+            return await self._prompt_trip_date(bot, userid, conv)
+
+        if answer:
             conv._origin = None
             conv._dest = None
+            conv._skip_date_prompt_once = True
+            await self._cleanup_chat_best_effort(bot, userid, conv)
             return await self._start_station_picker(bot, userid, conv, "origin")
 
         return await self._return_to_main_menu(bot, userid, conv)
