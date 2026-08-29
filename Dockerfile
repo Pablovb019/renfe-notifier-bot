@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar geckodriver (driver de Firefox)
-ARG GECKODRIVER_VERSION=0.36.0
+ARG GECKODRIVER_VERSION=0.37.1
 RUN wget -q "https://github.com/mozilla/geckodriver/releases/download/v${GECKODRIVER_VERSION}/geckodriver-v${GECKODRIVER_VERSION}-linux64.tar.gz" \
     && tar -xzf "geckodriver-v${GECKODRIVER_VERSION}-linux64.tar.gz" -C /usr/local/bin \
     && rm "geckodriver-v${GECKODRIVER_VERSION}-linux64.tar.gz"
