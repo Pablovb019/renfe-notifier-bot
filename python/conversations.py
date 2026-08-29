@@ -1094,7 +1094,7 @@ class RenfeBotConversations:
             no_trains_msg = TEXTS["NO_TRAINS_FOUND_PLAZA_H"] if conv._plaza_h else TEXTS["NO_TRAINS_FOUND"]
             await self._bot_send(bot, userid, conv, no_trains_msg.format(
                 origin=conv._origin, destination=conv._dest, date=conv._date))
-            return await self._prompt_recovery_options(bot, userid, conv)
+            return await self._offer_followup_for_all(bot, userid, conv)
 
         if mode == "specific":
             conv._train_select_mode = "specific"

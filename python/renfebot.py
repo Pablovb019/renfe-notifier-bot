@@ -79,7 +79,10 @@ class RenfeBot:
 
     def _install_handlers(self):
         conv_handler = ConversationHandler(
-            entry_points=[CommandHandler("start", self._CV.handler_start)],
+            entry_points=[
+                CommandHandler("start", self._CV.handler_start),
+                CommandHandler("menu", self._CV.handler_start),
+            ],
             states={
                 ConvStates.OPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, self._CV.handler_option)],
                 ConvStates.STATION: [
@@ -121,7 +124,12 @@ class RenfeBot:
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self._CV.handler_recovery_action)
                 ],
             },
-            fallbacks=[CommandHandler("cancel", self._CV.handler_cancel)],
+            fallbacks=[
+                CommandHandler("cancel", self._CV.handler_cancel),
+                CommandHandler("start", self._CV.handler_start),
+                CommandHandler("menu", self._CV.handler_start),
+            ],
+            allow_reentry=True,
         )
         self._app.add_handler(conv_handler)
         self._app.add_handler(CommandHandler("admin", self._h_admin_access))
