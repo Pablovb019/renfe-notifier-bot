@@ -128,11 +128,15 @@ class RenfeBot:
                 CommandHandler("cancel", self._CV.handler_cancel),
                 CommandHandler("start", self._CV.handler_start),
                 CommandHandler("menu", self._CV.handler_start),
+                CommandHandler("stats", self._h_stats),
+                CommandHandler("stop", self._h_stop),
             ],
             allow_reentry=True,
         )
         self._app.add_handler(conv_handler)
         self._app.add_handler(CommandHandler("admin", self._h_admin_access))
+        self._app.add_handler(CommandHandler("stats", self._h_stats))
+        self._app.add_handler(CommandHandler("stop", self._h_stop))
 
     @staticmethod
     def _format_time_for_followup(txt):
@@ -195,6 +199,9 @@ class RenfeBot:
                 None,
                 bool(f["plaza_h"]),
             )
+            # Incrementar contador de consultas (siempre que se consulte Renfe)
+            self._DB.increment_followup_queries(f["id"])
+
             if not res[0] or res[1] is None:
                 continue
 
@@ -204,35 +211,140 @@ class RenfeBot:
             if bool(f["watch_all"]):
                 if len(available) == 0:
                     continue
+                # Pasar a modo notifying: aviso periódico hasta /stop
+                self._DB.set_followup_notifying(f["id"])
                 await context.bot.send_message(
                     chat_id=f["userid"],
-                    text=TEXTS["FOLLOWUP_AVAILABLE_ALL_MSG"].format(
-                        date=f["travel_date"],
+                    text=TEXTS["FOLLOWUP_NOTIFYING_AVAILABLE_MSG"].format(
                         origin=f["origin"],
                         destination=f["destination"],
+                        date=f["travel_date"],
+                        dep_time="Todos los trenes",
                     ),
                 )
-                self._DB.delete_followup(f["id"])
                 continue
 
             match = self._match_followup_train(available, f["departure_time"], f["arrival_time"])
             if match is None:
                 continue
+            # Pasar a modo notifying: aviso periódico hasta /stop
+            self._DB.set_followup_notifying(f["id"])
             await context.bot.send_message(
                 chat_id=f["userid"],
-                text=TEXTS["FOLLOWUP_AVAILABLE_MSG"].format(
-                    date=f["travel_date"],
+                text=TEXTS["FOLLOWUP_NOTIFYING_AVAILABLE_MSG"].format(
                     origin=f["origin"],
-                    dep_time=f["departure_time"],
                     destination=f["destination"],
-                    arr_time=f["arrival_time"],
+                    date=f["travel_date"],
+                    dep_time=dep,
                 ),
             )
-            self._DB.delete_followup(f["id"])
+
+    async def notify_available_followups(self, context: ContextTypes.DEFAULT_TYPE):
+        """Envía aviso periódico cada 10s a los seguimientos en estado 'notifying'."""
+        notifying = self._DB.get_notifying_followups()
+        now_ts = int(datetime.datetime.now().timestamp())
+        for f in notifying:
+            dep = self._format_time_for_followup(f["departure_time"])
+            dep_label = dep if not bool(f["watch_all"]) else "Todos los trenes"
+            # Cancelar automáticamente si el tren ya salió
+            if now_ts >= f["departure_ts"]:
+                self._DB.delete_followup(f["id"])
+                await context.bot.send_message(
+                    chat_id=f["userid"],
+                    text=TEXTS["FOLLOWUP_EXPIRED_DEPARTURE_MSG"].format(
+                        date=f["travel_date"],
+                        origin=f["origin"],
+                        dep_time=dep,
+                        destination=f["destination"],
+                        arr_time=self._format_time_for_followup(f["arrival_time"]),
+                    ),
+                )
+                continue
+            await context.bot.send_message(
+                chat_id=f["userid"],
+                text=TEXTS["FOLLOWUP_NOTIFYING_AVAILABLE_MSG"].format(
+                    origin=f["origin"],
+                    destination=f["destination"],
+                    date=f["travel_date"],
+                    dep_time=dep_label,
+                ),
+            )
+
+    @staticmethod
+    def _build_stats_lines(followups):
+        """Genera las líneas de texto de estadísticas para una lista de followups."""
+        lines = []
+        for idx, f in enumerate(followups, start=1):
+            dep = f["departure_time"] if f["departure_time"] else "Todos los trenes"
+            daily = f.get("daily_queries") or 0
+            total = f.get("total_queries") or 0
+            lines.append(
+                TEXTS["STATS_ITEM"].format(
+                    index=idx,
+                    origin=f["origin"],
+                    destination=f["destination"],
+                    date=f["travel_date"],
+                    dep_time=dep,
+                    daily=daily,
+                    total=total,
+                )
+            )
+        return lines
+
+    async def send_daily_stats(self, context: ContextTypes.DEFAULT_TYPE):
+        """Tarea diaria a las 00:00: envía resumen de consultas a cada usuario y resetea contador diario."""
+        all_followups = self._DB.get_all_followups_for_daily_stats()
+        # Agrupar por userid
+        by_user = {}
+        for f in all_followups:
+            by_user.setdefault(f["userid"], []).append(f)
+        for userid, followups in by_user.items():
+            lines = self._build_stats_lines(followups)
+            if lines:
+                msg = TEXTS["DAILY_STATS_TITLE"] + "\n" + "\n".join(lines)
+                await context.bot.send_message(chat_id=userid, text=msg)
+        # Resetear contadores diarios tras el envío
+        self._DB.reset_daily_queries()
+
+    async def _h_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handler para el comando /stats."""
+        userid = update.effective_user.id
+        followups = self._DB.get_user_followups(userid)
+        if not followups:
+            await context.bot.send_message(chat_id=userid, text=TEXTS["STATS_EMPTY"])
+            return
+        lines = self._build_stats_lines(followups)
+        msg = TEXTS["STATS_TITLE"] + "\n" + "\n".join(lines)
+        await context.bot.send_message(chat_id=userid, text=msg)
+
+    async def _h_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handler para el comando /stop: detiene los avisos de seguimientos en estado 'notifying'."""
+        userid = update.effective_user.id
+        stopped = self._DB.stop_user_notifying_followups(userid)
+        if not stopped:
+            await context.bot.send_message(chat_id=userid, text=TEXTS["STOP_EMPTY"])
+            return
+        lines = []
+        for f in stopped:
+            dep = f["departure_time"] if f["departure_time"] else "Todos los trenes"
+            lines.append(f"• {f['origin']} - {f['destination']} ({f['travel_date']} {dep})")
+        msg = TEXTS["STOP_SUCCESS"].format(items="\n".join(lines))
+        await context.bot.send_message(chat_id=userid, text=msg)
 
     def register_jobs(self):
         if self._app.job_queue is not None:
-            self._app.job_queue.run_repeating(self.check_followups, interval=30, first=0, name="followups-30s")
+            self._app.job_queue.run_repeating(
+                self.check_followups, interval=30, first=0, name="followups-30s"
+            )
+            self._app.job_queue.run_repeating(
+                self.notify_available_followups, interval=10, first=10, name="notifying-10s"
+            )
+            # Tarea diaria a las 00:00 (hora local del servidor)
+            self._app.job_queue.run_daily(
+                self.send_daily_stats,
+                time=datetime.time(hour=0, minute=0, second=0),
+                name="daily-stats-00",
+            )
 
     def start(self):
         logger.info("=" * 60)
