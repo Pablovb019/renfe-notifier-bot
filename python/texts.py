@@ -87,7 +87,14 @@ texts_raw = {
 "MAIN_OP_YES": "SI",
 "MAIN_OP_NO": "NO",
 "NO_AVAILABLE_TRIPS_LIST": "ninguno",
-"CANCEL" : "Cancelar"
+"CANCEL" : "Cancelar",
+"FOLLOWUP_NOTIFYING_AVAILABLE_MSG": "Felicidades: Tu tren \"{origin} - {destination} ({date} {dep_time})\" ya tiene plazas disponibles. En caso de querer detener el seguimiento y el envio del mensaje, escriba /stop",
+"STATS_TITLE": "📊 Total de consultas realizadas hasta el momento:",
+"DAILY_STATS_TITLE": "📊 Resumen diario de consultas (00:00):",
+"STATS_ITEM": "{index}. {origin} - {destination} ({date} {dep_time}): {daily} consultas ({total} consultas en total)",
+"STATS_EMPTY": "No tienes seguimientos activos en este momento.",
+"STOP_SUCCESS": "🛑 Se ha detenido el seguimiento y el envío de avisos para:\n{items}",
+"STOP_EMPTY": "No tienes ningún seguimiento activo con avisos de plazas disponibles pendientes de detener con /stop."
 }
 
 texts = {}

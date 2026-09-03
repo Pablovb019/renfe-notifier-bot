@@ -70,10 +70,24 @@ class RenfeBotDB:
                         expires_at INTEGER NOT NULL,
                         departure_ts INTEGER NOT NULL,
                         status TEXT NOT NULL DEFAULT 'active',
+                        total_queries INTEGER NOT NULL DEFAULT 0,
+                        daily_queries INTEGER NOT NULL DEFAULT 0,
+                        last_query_date TEXT,
                         FOREIGN KEY(userid) REFERENCES users(userid)
                     )""")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_followups_status ON followups(status)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_followups_user ON followups(userid)")
+
+        # Migración retrocompatible de columnas si la tabla ya existía
+        cur.execute("PRAGMA table_info(followups)")
+        existing_cols = {row[1] for row in cur.fetchall()}
+        if "total_queries" not in existing_cols:
+            cur.execute("ALTER TABLE followups ADD COLUMN total_queries INTEGER NOT NULL DEFAULT 0")
+        if "daily_queries" not in existing_cols:
+            cur.execute("ALTER TABLE followups ADD COLUMN daily_queries INTEGER NOT NULL DEFAULT 0")
+        if "last_query_date" not in existing_cols:
+            cur.execute("ALTER TABLE followups ADD COLUMN last_query_date TEXT")
+
         conn.commit()
         cur.close()
         conn.close()
@@ -136,11 +150,13 @@ class RenfeBotDB:
         now = self._now_ts()
         if expires_ts <= now:
             return False, None
+        today_str = datetime.date.today().isoformat()
         cur.execute(
             """INSERT INTO followups
                (userid, origin, destination, travel_date, departure_time, arrival_time,
-                plaza_h, watch_all, created_at, expires_at, departure_ts, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')""",
+                plaza_h, watch_all, created_at, expires_at, departure_ts, status,
+                total_queries, daily_queries, last_query_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, ?)""",
             (
                 userid,
                 origin,
@@ -153,6 +169,7 @@ class RenfeBotDB:
                 now,
                 expires_ts,
                 departure_ts,
+                today_str,
             ),
         )
         conn.commit()
@@ -162,9 +179,74 @@ class RenfeBotDB:
     def get_user_followups(self, conn, cur, userid):
         cur.execute(
             """SELECT * FROM followups
-               WHERE userid=? AND status IN ('active', 'awaiting_extension')
+               WHERE userid=? AND status IN ('active', 'awaiting_extension', 'notifying')
                ORDER BY travel_date, departure_time, id""",
             (userid,)
+        )
+        return cur.fetchall()
+
+    @_openclose
+    def increment_followup_queries(self, conn, cur, followup_id):
+        cur.execute("SELECT total_queries, daily_queries, last_query_date FROM followups WHERE id=?", (followup_id,))
+        rows = cur.fetchall()
+        if not rows:
+            return
+        row = rows[0]
+        today_str = datetime.date.today().isoformat()
+        total_q = (row.get("total_queries") or 0) + 1
+        if row.get("last_query_date") == today_str:
+            daily_q = (row.get("daily_queries") or 0) + 1
+        else:
+            daily_q = 1
+        cur.execute(
+            "UPDATE followups SET total_queries=?, daily_queries=?, last_query_date=? WHERE id=?",
+            (total_q, daily_q, today_str, followup_id),
+        )
+        conn.commit()
+
+    @_openclose
+    def reset_daily_queries(self, conn, cur):
+        cur.execute("UPDATE followups SET daily_queries=0")
+        conn.commit()
+
+    @_openclose
+    def set_followup_notifying(self, conn, cur, followup_id):
+        cur.execute(
+            "UPDATE followups SET status='notifying' WHERE id=?",
+            (followup_id,)
+        )
+        conn.commit()
+
+    @_openclose
+    def get_notifying_followups(self, conn, cur):
+        cur.execute(
+            """SELECT * FROM followups
+               WHERE status='notifying'
+               ORDER BY id"""
+        )
+        return cur.fetchall()
+
+    @_openclose
+    def stop_user_notifying_followups(self, conn, cur, userid):
+        cur.execute(
+            "SELECT * FROM followups WHERE userid=? AND status='notifying'",
+            (userid,)
+        )
+        stopped = cur.fetchall()
+        if stopped:
+            cur.execute(
+                "DELETE FROM followups WHERE userid=? AND status='notifying'",
+                (userid,)
+            )
+            conn.commit()
+        return stopped
+
+    @_openclose
+    def get_all_followups_for_daily_stats(self, conn, cur):
+        cur.execute(
+            """SELECT * FROM followups
+               WHERE status IN ('active', 'awaiting_extension', 'notifying')
+               ORDER BY userid, travel_date, departure_time, id"""
         )
         return cur.fetchall()
 
