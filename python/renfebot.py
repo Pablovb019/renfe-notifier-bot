@@ -33,7 +33,12 @@ class RenfeBot:
         self._DB = renfebotdb.RenfeBotDB(database)
         self._RF = renfechecker.RenfeChecker()
         self._CV = RenfeBotConversations(self)
-        self._app = Application.builder().token(token).build()
+        self._app = (
+            Application.builder()
+            .token(token)
+            .post_init(self._on_startup)
+            .build()
+        )
         self._install_handlers()
 
     async def ask_admin_for_access(self, bot, userid, username):
@@ -364,7 +369,6 @@ class RenfeBot:
         logger.info("=" * 60)
         self.register_jobs()
         try:
-            self._app.post_init = self._on_startup
             self._app.run_polling()
         finally:
             self._RF.close()
