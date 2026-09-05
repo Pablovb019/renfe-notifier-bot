@@ -346,12 +346,25 @@ class RenfeBot:
                 name="daily-stats-00",
             )
 
+    async def _on_startup(self, app: Application):
+        """Notifica al admin que el bot se ha iniciado / actualizado con éxito."""
+        if self._admin_id:
+            try:
+                await app.bot.send_message(
+                    chat_id=self._admin_id,
+                    text="🚀 *Renfe Notifier Bot actualizado y en línea*\nEl bot se ha desplegado correctamente y está listo para recibir comandos.",
+                    parse_mode="Markdown",
+                )
+            except Exception as e:
+                logger.warning(f"No se pudo enviar mensaje de arranque al admin: {e}")
+
     def start(self):
         logger.info("=" * 60)
         logger.info("✅ BOT STARTED - READY FOR /start COMMAND")
         logger.info("=" * 60)
         self.register_jobs()
         try:
+            self._app.post_init = self._on_startup
             self._app.run_polling()
         finally:
             self._RF.close()
