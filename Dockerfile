@@ -1,12 +1,16 @@
 FROM python:3.12-slim
 
-# Dependencias del sistema para Selenium + Firefox
+# Dependencias del sistema para Selenium + Firefox y zona horaria
 RUN apt-get update && apt-get install -y --no-install-recommends \
     firefox-esr \
     wget \
     ca-certificates \
     xvfb \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+ENV TZ=Europe/Madrid
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Instalar geckodriver (driver de Firefox)
 ARG GECKODRIVER_VERSION=0.37.1
