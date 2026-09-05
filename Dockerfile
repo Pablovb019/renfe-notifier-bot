@@ -19,20 +19,13 @@ RUN wget -q "https://github.com/mozilla/geckodriver/releases/download/v${GECKODR
     && rm "geckodriver-v${GECKODRIVER_VERSION}-linux64.tar.gz"
 
 WORKDIR /app
+
+# 1. Copiar primero solo los requerimientos para cachear la capa de pip
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r /app/requirements.txt
+
+# 2. Copiar el código fuente AL FINAL (los cambios en código no invalidan las capas anteriores)
 COPY . /app
-
-# (Recomendado) actualizar tooling base
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# Dependencias Python actualizadas
-RUN pip install --no-cache-dir --upgrade \
-    "python-telegram-bot[job-queue]" \
-    selenium \
-    pyvirtualdisplay \
-    emoji \
-    json5 \
-    urllib3 \
-    requests \
-    certifi
 
 CMD ["python", "python/renfebot.py", "--database", "/data/renfebot.db"]

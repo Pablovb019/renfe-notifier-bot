@@ -1,0 +1,9 @@
+.git
+.gitignore
+data/
+secrets/
+*.db
+*.pyc
+__pycache__/
+.venv
+venv/

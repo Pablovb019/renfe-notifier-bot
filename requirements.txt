@@ -1,0 +1,8 @@
+python-telegram-bot[job-queue]
+selenium
+pyvirtualdisplay
+emoji
+json5
+urllib3
+requests
+certifi
