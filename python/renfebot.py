@@ -344,10 +344,22 @@ class RenfeBot:
             self._app.job_queue.run_repeating(
                 self.notify_available_followups, interval=10, first=10, name="notifying-10s"
             )
-            # Tarea diaria a las 00:00 (hora local del servidor)
+            # Tarea diaria a las 00:00 hora de Madrid (Europe/Madrid)
+            try:
+                from zoneinfo import ZoneInfo
+                tz_madrid = ZoneInfo("Europe/Madrid")
+            except Exception:
+                tz_madrid = None
+
+            daily_time = (
+                datetime.time(hour=0, minute=0, second=0, tzinfo=tz_madrid)
+                if tz_madrid
+                else datetime.time(hour=0, minute=0, second=0)
+            )
+
             self._app.job_queue.run_daily(
                 self.send_daily_stats,
-                time=datetime.time(hour=0, minute=0, second=0),
+                time=daily_time,
                 name="daily-stats-00",
             )
 
